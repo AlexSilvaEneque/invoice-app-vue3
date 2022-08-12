@@ -1,19 +1,27 @@
 <script setup>
   import Navigation from './components/Navigation.vue'
   import InvoiceModal from './components/InvoiceModal.vue'
-  import { computed } from 'vue'
+  import Modal from './components/Modal.vue'
+  import { computed, onMounted } from 'vue'
   import { useStore } from 'vuex'
 
   const store = useStore()
 
   const invoice = computed(() => store.state.invoiceModal)
+  const modal = computed(() => store.state.modalActive)
+  const invoiceLoaded = computed(() => store.state.invoicesLoaded)
+
+  onMounted(() => {
+    store.dispatch('getInvoices')
+  })
 
 </script>
 
 <template>
-  <div class="main-content">
+  <div class="main-content" v-if="invoiceLoaded">
     <Navigation />
-    <div class="content-body">
+    <Modal v-if="modal" />
+    <div class="content-body">      
       <transition name="invoice">
         <InvoiceModal v-if="invoice" />
       </transition>      
@@ -32,8 +40,9 @@
 
   .main-content {
     display: flex;
-    background-color: #1e2131;
-    height: 100vh;
+    // background-color: #1e2131;
+    background-color: rgb(22, 21, 35);
+    min-height: 100vh;
     
     .content-body {      
       position: relative;
@@ -61,6 +70,28 @@
     .invoice-leave-to {
       transform: translateX(-700px);
     }
-
   }
+  .paid {
+      &::before {
+        background-color: #33d69f;
+      }
+      color: #33d69f;
+      background-color: rgba(51, 214, 160, .1);
+    }
+
+    .pending {
+      &::before {
+        background-color: #ffbf00;
+      }
+      color: #ffbf00;
+      background-color: rgba(255, 145, 0, .1);
+    }
+
+    .draft {
+      &::before {
+        background-color: #dfe3fa;
+      }
+      color: #dfe3fa;
+      background-color: rgba(223, 227, 250, .1);
+    }
 </style>

@@ -1,35 +1,71 @@
 <script setup>
-    import { ref } from 'vue';
-    import { mapState, useStore } from 'vuex';
+    import Invoice from '../components/Invoice.vue'
+    import { computed, ref } from 'vue';
+    import { useStore } from 'vuex';
 
     const filterMenu = ref(false)
-
-    const toggleFilterMenu = () => {
-        filterMenu.value = !filterMenu.value
-        console.log(filterMenu.value)
-    }
+    const filteredInvoice = ref('')    
 
     const store = useStore()
 
-    const newInvoice = () => store.dispatch('change') // actions
+    const invoices = computed(()=> store.state.invoiceData)
+    const editInvoice = computed(() => store.state.editInvoice)
+
+    const toggleFilterMenu = () => {
+        filterMenu.value = !filterMenu.value        
+    }
+
+    const filteredInvoices = e => {        
+        if (e.target.innerText === 'Clear Filter') {
+            filteredInvoice.value = ''
+            return
+        }
+        filteredInvoice.value = e.target.innerText
+    }
+
+    const filteredData = computed(() => {
+        return invoices.value.filter(invoice => {
+            if (filteredInvoice.value === 'Draft') {
+                return invoice.invoiceDraft === true
+            }
+
+            if (filteredInvoice.value === 'Pending') {
+                return invoice.invoicePending === true   
+            }
+
+            if (filteredInvoice.value === 'Paid') {
+                return invoice.invoicePaid === true
+            }
+            return invoice
+        })
+    })
+
+    const newInvoice = () => {
+        if (editInvoice.value) {
+            store.commit('toggleEditInvoice')        
+        }
+        store.dispatch('change') // actions             
+    }
+
 </script>
 
 <template>
     <div class="home-container">
+        <!-- Header -->
         <div class="home-header">
             <div class="left">
                 <h1>Invoices</h1>
-                <span>There are 3 total invoices</span>
+                <span>There are {{ filteredData.length }} total invoices</span>
             </div>
             <div class="right">
                 <div @click="toggleFilterMenu" class="filter">
-                    <span>Filter by status</span>
+                    <span>Filter by status <span v-if="filteredInvoice">{{ filteredInvoice }}</span></span>
                     <font-awesome-icon icon="fa-solid fa-angle-down" class="icon" />
                     <ul v-show="filterMenu" class="filter-menu">
-                        <li>Draft</li>
-                        <li>Pending</li>
-                        <li>Paid</li>
-                        <li>Clear Filter</li>
+                        <li @click="filteredInvoices">Draft</li>
+                        <li @click="filteredInvoices">Pending</li>
+                        <li @click="filteredInvoices">Paid</li>
+                        <li @click="filteredInvoices">Clear Filter</li>
                     </ul>
                 </div>
                 <div @click="newInvoice" class="button">
@@ -39,6 +75,14 @@
                     <span>New Invoice</span>
                 </div>
             </div>
+        </div>
+        <!-- Invoice -->
+        <div v-if="invoices.length > 0">
+            <Invoice v-for="(invoice, index) in filteredData" :invoice="invoice" :key="index" />
+        </div>
+        <div class="empty" v-else>            
+            <h3>There is nothing here</h3>
+            <p>Creaet a new invoice by cliking the New Invoice button and get started</p>
         </div>
     </div>
 </template>
@@ -135,6 +179,31 @@
                     }
 
                 }
+            }
+        }
+
+        .empty {
+            margin-top: 160px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #eee;
+
+            // img {
+
+            // }
+
+            h3 {
+                font-size: 20px;
+                margin-top: 40px;
+            }
+
+            p {
+                text-align: center;
+                max-width: 224px;
+                font-size: 12px;
+                font-weight: 300;
+                margin-top: 16px;
             }
         }
     }

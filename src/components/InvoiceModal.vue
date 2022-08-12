@@ -1,9 +1,14 @@
 <script setup>
-    import { onMounted, ref, watch } from 'vue'
+    import Loading from './Loading.vue'
+    import db from '../firebase/firebase'
+    import { useRoute } from 'vue-router'
+    import { collection, addDoc, updateDoc, doc } from 'firebase/firestore'
+    import { computed, onMounted, ref, watchEffect } from 'vue'
     import { useStore } from 'vuex'
     import { uid } from 'uid'
-
+    
     const store = useStore()
+    const route = useRoute()
 
     const billerStreetAddress = ref('')
     const billerCity = ref('')
@@ -26,12 +31,22 @@
     const invoicePending = ref('')
     const invoiceDraft = ref('')
     const invoiceItems = ref([])
-    const invoiceTotal = 0
-
+    const invoiceTotal = ref(0)
+    const invoicePaid = ref('')
+    
+    const docId = ref('')
     const dateOptions = { year: "numeric", month: "short", day: "numeric" }
+    const loading = ref(false)
+    const invoiceWrap = ref('')
+
+    const editInvoice = computed(() => store.state.editInvoice)
+    const currentInvoiceArray = computed(() => store.state.currentInvoiceArray)
 
     const closeInvoice = () => {
         store.dispatch('change')
+        if (editInvoice.value) {
+            store.commit('toggleEditInvoice')
+        }
     }
 
     const addNewInvoiceItem = () => {
@@ -48,15 +63,136 @@
         invoiceItems.value = invoiceItems.value.filter(item => item.id !== id)
     }
 
-    const checkClick = () => {
+    const checkClick = (event) => {       
+        if (event) {
+            if (event.target === invoiceWrap.value) {
+                store.dispatch('changeModal')
+            }   
+        }        
+    }
+
+    const calculateInvoiceTotal = () => {
+        invoiceTotal.value = 0
+        invoiceItems.value.forEach(item => {
+            invoiceTotal.value += item.total
+        })
+    }
+
+    const createInvoice = () => {
+        invoicePending.value = true
+    }
+
+    const saveDraft = () => {
+        invoiceDraft.value = true
+    }
+
+    // save operation
+    const uploadInvoice = async () => {
+        if (invoiceItems.value.length <= 0) {
+            alert('Please ensure you filled out work items!!')
+        }
+
+        loading.value = true
+
+        calculateInvoiceTotal()
+
+        try {
+            await addDoc(collection(db, 'invoices'), {
+                invoiceId: uid(6),
+                billerStreetAddress: billerStreetAddress.value,
+                billerCity: billerCity.value,
+                billerZipCode: billerZipCode.value,
+                billerCountry: billerCountry.value,
+                clientName: clientName.value,
+                clientEmail: clientEmail.value,
+                clientAddress: clientAddress.value,
+                clientCity: clientCity.value,
+                clientZipCode: clientZipCode.value,
+                clientCountry: clientCountry.value,
+                invoiceDateCurrent: invoiceDateCurrent.value,
+                invoiceDate: invoiceDate.value,
+                paymentTerms: paymentTerms.value,
+                paymentDueDateUnix: paymentDueDateUnix.value,
+                paymentDueDate: paymentDueDate.value,
+                productDescription: productDescription.value,
+                invoicePending: invoicePending.value,
+                invoiceDraft: invoiceDraft.value,
+                invoiceItems: invoiceItems.value,
+                invoiceTotal: invoiceTotal.value,
+                invoicePaid: null
+            })
+
+            loading.value = false
+
+            store.dispatch('change')
+
+            // TODO: reload data
+            store.dispatch('getInvoices')
+
+        } catch (error) {
+            console.log(error)
+        }
 
     }
 
-    const submitForm = () => {
+    const updateInvoice = async () => {
+        if (invoiceItems.value.length <= 0) {
+            alert('Please ensure you filed out work items!')
+        }
 
+        loading.value = true
+
+        calculateInvoiceTotal()
+
+        try {
+            const data = doc(db, 'invoices', docId.value)
+            
+            await updateDoc(data, {
+                billerStreetAddress: billerStreetAddress.value,
+                billerCity: billerCity.value,
+                billerZipCode: billerZipCode.value,
+                billerCountry: billerCountry.value,
+                clientName: clientName.value,
+                clientEmail: clientEmail.value,
+                clientAddress: clientAddress.value,
+                clientCity: clientCity.value,
+                clientZipCode: clientZipCode.value,
+                clientCountry: clientCountry.value,
+                invoiceDateCurrent: invoiceDateCurrent.value,
+                invoiceDate: invoiceDate.value,
+                paymentTerms: paymentTerms.value,
+                paymentDueDateUnix: paymentDueDateUnix.value,
+                paymentDueDate: paymentDueDate.value,
+                productDescription: productDescription.value,
+                invoicePending: invoicePending.value,
+                invoiceDraft: invoiceDraft.value,
+                invoiceItems: invoiceItems.value,
+                invoiceTotal: invoiceTotal.value
+            })
+
+            loading.value = false            
+
+            const payload = {
+                docId: docId.value,
+                routeId: route.params.invoiceId
+            }
+
+            store.dispatch('updateInvoice', payload)            
+            
+        } catch (error) {
+            console.log(error)
+        }
+    }
+
+    const submitForm = () => {
+        if (editInvoice.value) {
+            updateInvoice()
+            return
+        }
+        uploadInvoice()
     }    
 
-    watch(() => {
+    watchEffect(() => {
         const futureDate = new Date()
         paymentDueDateUnix.value = futureDate.setDate(futureDate.getDate() + parseInt(paymentTerms.value))
 
@@ -66,8 +202,40 @@
     })
 
     onMounted(() => {
-        invoiceDateCurrent.value = Date.now()
-        invoiceDate.value = new Date(invoiceDateCurrent.value).toLocaleDateString('en-GB', dateOptions)
+        if (!editInvoice.value) {
+            invoiceDateCurrent.value = Date.now()
+            invoiceDate.value = new Date(invoiceDateCurrent.value).toLocaleDateString('en-GB', dateOptions)    
+        }
+
+        if (editInvoice.value) {
+            const currentInvoice = currentInvoiceArray.value[0]            
+
+            docId.value = currentInvoice.docId
+            billerStreetAddress.value = currentInvoice.billerStreetAddress
+            billerCity.value = currentInvoice.billerCity
+            billerZipCode.value = currentInvoice.billerZipCode
+            billerCountry.value = currentInvoice.billerCountry
+            clientName.value = currentInvoice.clientName
+            clientEmail.value = currentInvoice.clientEmail
+            clientAddress.value = currentInvoice.clientAddress
+            clientCity.value = currentInvoice.clientCity
+            clientZipCode.value = currentInvoice.clientZipCode
+            clientCountry.value = currentInvoice.clientCountry
+            invoiceDateCurrent.value = currentInvoice.invoiceDateCurrent
+            invoiceDate.value = currentInvoice.invoiceDate
+            paymentTerms.value = currentInvoice.paymentTerms
+            paymentDueDateUnix.value = currentInvoice.paymentDueDateUnix
+            paymentDueDate.value = currentInvoice.paymentDueDate
+            productDescription.value = currentInvoice.productDescription
+            invoicePending.value = currentInvoice.invoicePending
+            invoiceDraft.value = currentInvoice.invoiceDraft
+            invoiceItems.value = currentInvoice.invoiceItems
+            invoiceTotal.value = currentInvoice.invoiceTotal
+            // invoicePaid = null
+            
+        }
+        
+        checkClick()        
     })
 
 </script>
@@ -75,7 +243,9 @@
 <template>
     <div @click="checkClick" class="invoice-wrap" ref="invoiceWrap">
         <form @submit.prevent="submitForm" class="invoice-content">
-            <h1>New Invoice</h1>
+            <Loading v-show="loading" />
+            <h1 v-if="!editInvoice">New Invoice</h1>
+            <h1 v-else>Edit Invoice</h1>
 
             <!-- Bill From -->
                 <div class="bill-from">
@@ -266,12 +436,13 @@
                         </button>
                     </div>
                     <div class="right">
-                        <button @click="saveDraft" class="draft">
+                        <button v-if="!editInvoice" type="submit" @click="saveDraft" class="draft">
                             Save Draft
                         </button>
-                        <button @click="createInvoice" class="create">
+                        <button v-if="!editInvoice" type="submit" @click="createInvoice" class="create">
                             Create Invoice
                         </button>
+                        <button v-if="editInvoice" type="submit" class="update">Update Invoice</button>
                     </div>
                 </div>
             <!-- End Save/Discard -->
@@ -284,8 +455,8 @@
         position: fixed;
         top: 0;
         left: 90px;
-        background-color: transparent;
-        width: 700px;
+        background-color: transparent;        
+        width: 100%;
         height: 100vh;
         overflow-y: scroll;
 
@@ -294,6 +465,9 @@
         }
 
         .invoice-content {
+            max-width: 700px;
+            width: 100%;
+
             position: relative;
             padding: 56px;
             width: 100%;

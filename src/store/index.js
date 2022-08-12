@@ -4,7 +4,12 @@ import mutations from './mutations'
 
 export default createStore({
     state: {
-        invoiceModal: false
+        invoiceData: [],
+        invoiceModal: false,
+        modalActive: false,
+        invoicesLoaded: false,
+        currentInvoiceArray: [],
+        editInvoice: false
     },
     mutations,
     actions
